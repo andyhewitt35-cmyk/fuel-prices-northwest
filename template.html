@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<meta name="theme-color" content="#13294b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Fuel prices">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>North West fuel prices</title>
+<script>
+// home-screen icon + manifest only when served from a website (avoids errors when opened as a file)
+if(/^https?:$/.test(location.protocol)){[["manifest","manifest.webmanifest"],["apple-touch-icon","apple-touch-icon.png"],["icon","favicon.png"]].forEach(function(x){var l=document.createElement("link");l.rel=x[0];l.href=x[1];document.head.appendChild(l);});}
+</script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<style>
+:root{--bg:#f4f5f7;--card:#fff;--ink:#1d2330;--mute:#636b7a;--line:#e2e5ea;--acc:#0b5cad;--ok:#1a7f37;--warn:#b35900;--bad:#b42318}
+*{box-sizing:border-box}
+body{margin:0;font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+header{background:#13294b;color:#fff;padding:12px 16px;padding-top:max(12px,env(safe-area-inset-top))}
+header h1{margin:0;font-size:20px}
+header p{margin:4px 0 0;font-size:13px;opacity:.85}
+main{max-width:1200px;margin:0 auto;padding:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:12px}
+h2{font-size:16px;margin:0 0 8px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:6px 0}
+.lbl{font-size:13px;color:var(--mute);min-width:92px}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+button,.btn{font:inherit;border:1px solid #c5cbd5;background:#fff;color:var(--ink);border-radius:8px;padding:7px 11px;cursor:pointer}
+button:hover{border-color:var(--acc)}
+button.on{background:var(--acc);border-color:var(--acc);color:#fff}
+input[type=text],input[type=search],select{font:inherit;padding:7px 10px;border:1px solid #c5cbd5;border-radius:8px;background:#fff;min-width:0}
+#placeInput{width:190px}#search{flex:1;min-width:180px}
+.note{font-size:13px;color:var(--mute)}
+#placeMsg{font-size:13px}
+.err{color:var(--bad)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.grid>*{min-width:0}
+@media(max-width:860px){.grid{grid-template-columns:1fr}}
+ol.top{margin:0;padding:0;list-style:none;counter-reset:t}
+ol.top li{display:flex;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--line);cursor:pointer}
+ol.top li:first-child{border-top:0}
+ol.top li::before{counter-increment:t;content:counter(t);font-weight:700;color:var(--mute);width:16px}
+.pbig{font-size:20px;font-weight:700;min-width:74px}
+.pbig small{font-size:12px;font-weight:400;color:var(--mute)}
+.tinfo{flex:1;min-width:0}.tinfo b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tinfo span{font-size:13px;color:var(--mute)}
+.dist{font-size:13px;white-space:nowrap;text-align:right}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center}
+.stats div{background:#f7f8fa;border-radius:8px;padding:8px}
+.stats b{display:block;font-size:20px}
+.stats span{font-size:12px;color:var(--mute)}
+table.all{width:100%;border-collapse:collapse;font-size:14px}
+table.all th,table.all td{padding:6px 7px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+table.all th{background:#f7f8fa;position:sticky;top:0;cursor:pointer;user-select:none;white-space:nowrap;font-size:13px}
+table.all th.sorted::after{content:" ▲";font-size:10px}
+table.all th.sorted.desc::after{content:" ▼"}
+table.all td.p{font-weight:700;white-space:nowrap}
+table.all tr:hover td{background:#f3f7fd}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:middle;border:1px solid rgba(0,0,0,.25)}
+.stale{color:var(--warn)}
+.tbl-wrap{max-height:640px;overflow:auto;border:1px solid var(--line);border-radius:8px}
+#map{height:430px;border-radius:8px;border:1px solid var(--line)}
+#mapMsg{padding:30px;text-align:center;color:var(--mute)}
+.sub{display:none;font-size:12px;color:var(--mute)}
+.mini{width:100%;border-collapse:collapse;font-size:13px}.mini td,.mini th{padding:4px 6px;border-bottom:1px solid var(--line);text-align:right}.mini td:first-child,.mini th:first-child{text-align:left}
+.src li{margin:3px 0}.ok{color:var(--ok)}.fail{color:var(--bad)}.old{color:var(--warn)}
+.leaflet-popup-content{font-size:13px;line-height:1.4}
+.leaflet-popup-content table td{padding:1px 6px 1px 0}
+.fuelbar{position:sticky;top:0;z-index:1000;background:#13294b;padding:0 12px 10px;display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.fuelbar button{min-height:52px;border:0;background:#2a4572;color:#fff;font-weight:600;line-height:1.15;padding:6px 4px}
+.fuelbar button small{display:block;font-weight:400;font-size:12px;opacity:.85}
+.fuelbar button.on{background:#fff;color:#13294b}
+.places{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.rad{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:6px}
+.places button,.rad button{min-height:44px;padding:6px 4px}
+#staleBanner{background:#fff4e5;border:1px solid #f0c27a;color:#7a4100;border-radius:10px;padding:10px 12px;margin-bottom:12px}
+#topCard h2{margin-top:12px}
+@media(max-width:640px){
+  button,input[type=text],input[type=search]{min-height:44px;font-size:16px}
+  .places button,.rad button{font-size:15px}
+  ol.top li{padding:11px 0}
+  table.all td{padding:9px 7px}
+  main{padding:8px}.card{padding:10px}
+  .col-addr,.col-town,.col-upd,.col-pc{display:none}
+  .sub{display:block}
+  .lbl{min-width:0;width:100%}
+  #placeInput{flex:1 1 100%}
+  #map{height:330px}
+  table.all{font-size:13px}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>North West fuel prices</h1>
+  <p id="hdr">Loading…</p>
+</header>
+<nav class="fuelbar" id="fuelBtns" aria-label="Fuel type"></nav>
+<main>
+  <div id="staleBanner" hidden></div>
+  <div class="grid">
+    <section class="card" id="topCard">
+      <div class="places">
+        <button data-place="parbold" class="on">Parbold</button>
+        <button data-place="orrell">Orrell</button>
+        <button id="geoBtn">📍 Near me</button>
+      </div>
+      <div class="rad" id="radBtns" aria-label="Distance"></div>
+      <div id="placeMsg" class="note" style="margin-top:6px"></div>
+      <h2 id="topTitle">Cheapest 5 nearby</h2>
+      <ol class="top" id="top5"></ol>
+    </section>
+    <section class="card">
+      <h2 id="statTitle">North West</h2>
+      <div class="stats" id="stats"></div>
+      <table class="mini" id="allStats" style="margin-top:10px"></table>
+    </section>
+  </div>
+
+  <section class="card" aria-label="More options">
+    <div class="row"><span class="lbl">Other place</span>
+      <input type="text" id="placeInput" placeholder="Postcode or town" aria-label="Postcode or town" autocomplete="postal-code">
+      <button id="placeGo">Go</button></div>
+    <div class="row"><span class="lbl">Search</span>
+      <input type="search" id="search" placeholder="Town, postcode or brand, e.g. Wigan, WN5, Tesco"></div>
+    <div class="row"><span class="lbl"></span>
+      <label class="note"><input type="checkbox" id="freshOnly"> Only show prices changed in the last 7 days</label></div>
+  </section>
+
+  <section class="card">
+    <h2>Map <span class="note">(green = cheapest, red = dearest, of the stations shown)</span></h2>
+    <div id="map"><div id="mapMsg">The map needs an internet connection. The table below still works offline.</div></div>
+  </section>
+
+  <section class="card">
+    <h2 id="tblTitle">All stations</h2>
+    <div class="row note">Tap a column heading to sort. Tap a row to see it on the map.</div>
+    <div class="tbl-wrap">
+      <table class="all" id="tbl">
+        <thead><tr>
+          <th data-k="price">Price p/litre</th>
+          <th data-k="brand">Brand</th>
+          <th data-k="name">Station</th>
+          <th data-k="addr" class="col-addr">Address</th>
+          <th data-k="pc" class="col-pc">Postcode</th>
+          <th data-k="town" class="col-town">Town</th>
+          <th data-k="dist">Miles</th>
+          <th data-k="t" class="col-upd">Last updated</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Where the prices come from</h2>
+    <ul class="src" id="srcList"></ul>
+    <p class="note" id="footNote"></p>
+    <details id="rejBox"><summary class="note">Prices left out as obviously wrong</summary><ul class="note" id="rejList"></ul></details>
+  </section>
+</main>
+<script>
+const DATA = /*__FUEL_DATA__*/null;
+</script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script>
+(function(){
+"use strict";
+const FUELS = {E10:"Unleaded (E10)", E5:"Super unleaded (E5)", B7:"Diesel", SDV:"Premium diesel"};
+const SHORT = {E10:"Unleaded", E5:"Super", B7:"Diesel", SDV:"Premium diesel"};
+const PLACES = {
+  parbold:{name:"Parbold WN8", lat:53.5920, lon:-2.7708},
+  orrell:{name:"Orrell WN5", lat:53.5282, lon:-2.7046}
+};
+const RADII = [5,10,25,50,0];
+const S = {fuel:"E10", place:PLACES.parbold, radius:10, q:"", fresh:false, sort:"price", desc:false};
+const st = DATA.stations;
+const now = Date.now();
+const WEEK = 7*864e5;
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmtP = p => p.toFixed(1)+"p";
+const label = s => (s.name.toLowerCase().includes(s.brand.toLowerCase())||s.brand==="Independent") ? s.name : s.brand+" – "+s.name;
+function miles(a,b,c,d){const r=3958.8,t=Math.PI/180,x=Math.sin((c-a)*t/2)**2+Math.cos(a*t)*Math.cos(c*t)*Math.sin((d-b)*t/2)**2;return 2*r*Math.asin(Math.sqrt(x));}
+function age(t){
+  if(!t) return {txt:"unknown",full:"unknown",stale:true};
+  const d=new Date(t), ms=now-d;
+  const full=d.toLocaleString("en-GB",{timeZone:"Europe/London",weekday:"short",day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})+" UK";
+  const hm=d.toLocaleTimeString("en-GB",{timeZone:"Europe/London",hour:"2-digit",minute:"2-digit"});
+  const day=k=>new Date(k).toLocaleDateString("en-GB",{timeZone:"Europe/London"});
+  let txt;
+  if(day(d)===day(now)) txt="today "+hm;
+  else if(day(d)===day(now-864e5)) txt="yesterday "+hm;
+  else { const n=Math.round(ms/864e5); txt=n+" days ago"; }
+  return {txt, full, stale: ms>2*WEEK};
+}
+function colour(frac){ // 0 = cheapest (green) .. 1 = dearest (red)
+  const h=Math.round(120*(1-Math.max(0,Math.min(1,frac))));
+  return "hsl("+h+",75%,42%)";
+}
+
+// ---------- header, sources ----------
+const ageH=(now-new Date(DATA.generated))/36e5;
+if(/^https?:$/.test(location.protocol)&&ageH>4){const sb=$("staleBanner");sb.hidden=false;sb.textContent="These prices were fetched "+(ageH<48?Math.round(ageH)+" hours":Math.round(ageH/24)+" days")+" ago ("+DATA.generated_uk+"). The automatic refresh may have paused, so check the forecourt price.";}
+$("hdr").textContent = "Prices fetched "+DATA.generated_uk+" · "+DATA.counts.stations+" stations, "+DATA.counts.brands+" brands";
+const sl=$("srcList");
+DATA.sources.forEach(s=>{
+  const li=document.createElement("li");
+  let cls, txt;
+  if(!s.ok){cls="fail";txt="✗ failed: "+s.error;}
+  else if(s.used===false){cls="old";txt="⚠ "+s.note;}
+  else {cls="ok";txt="✓ "+s.rows+" stations"+(s.nw_rows!=null?" ("+s.nw_rows+" in the North West)":"")+", updated "+s.last_updated_uk;}
+  li.innerHTML="<b>"+esc(s.name)+"</b> <span class='"+cls+"'>"+esc(txt)+"</span>";
+  sl.appendChild(li);
+});
+const c=DATA.counts;
+$("footNote").textContent="Fuel Finder is the government's legal price register: every UK forecourt must report price changes within 30 minutes. "+
+ "Duplicates across sources are merged by postcode and location. Where a retailer feed is newer than Fuel Finder for the same station, the newer price is shown. "+
+ c.stations_updated_last_7_days+" of "+c.stations+" stations changed a price in the last 7 days; forecourts only report when a price changes, so an older date usually just means no change, but prices over 14 days old are shown in orange as worth checking. "+
+ c.rejected_prices+" obviously wrong price(s) were left out, and "+c.closed_excluded+" closed station(s) are hidden. Always check the price on the forecourt.";
+
+(DATA.rejected||[]).forEach(r=>{const li=document.createElement("li");li.textContent=r.brand+" "+r.station+" ("+r.pc+"): "+(SHORT[r.fuel]||r.fuel)+" "+r.value.toFixed(1)+"p from "+r.src+" – "+r.why;$("rejList").appendChild(li);});
+if(!(DATA.rejected||[]).length) $("rejBox").remove();
+
+// ---------- controls ----------
+const fb=$("fuelBtns");
+const BTN={E10:["Unleaded","E10"],E5:["Super","E5"],B7:["Diesel","B7"],SDV:["Premium","diesel"]};
+Object.keys(FUELS).forEach(f=>{const b=document.createElement("button");b.innerHTML=BTN[f][0]+"<small>"+BTN[f][1]+"</small>";b.setAttribute("aria-label",FUELS[f]);b.dataset.f=f;if(f===S.fuel)b.className="on";b.onclick=()=>{S.fuel=f;[...fb.children].forEach(x=>x.classList.toggle("on",x===b));render(true);};fb.appendChild(b);});
+const rb=$("radBtns");
+RADII.forEach(r=>{const b=document.createElement("button");b.textContent=r?r+" mi":"All";b.setAttribute("aria-label",r?r+" miles":"All of the North West");b.dataset.r=r;if(r===S.radius)b.className="on";b.onclick=()=>{S.radius=r;[...rb.children].forEach(x=>x.classList.toggle("on",x===b));render(true);};rb.appendChild(b);});
+function setPlace(p,btn){
+  S.place=p;
+  document.querySelectorAll("[data-place],#geoBtn,#placeGo").forEach(x=>x.classList.remove("on"));
+  if(btn)btn.classList.add("on");
+  $("placeMsg").className="note";
+  $("placeMsg").textContent="Distances from "+p.name;
+  render(true);
+}
+document.querySelectorAll("[data-place]").forEach(b=>b.onclick=()=>setPlace(PLACES[b.dataset.place],b));
+$("geoBtn").onclick=()=>{
+  if(!navigator.geolocation){msg("Your browser can't share location.",true);return;}
+  msg("Finding you…");
+  navigator.geolocation.getCurrentPosition(p=>setPlace({name:"your location",lat:p.coords.latitude,lon:p.coords.longitude},$("geoBtn")),
+    e=>msg("Couldn't get your location ("+e.message+"). Type a postcode instead.",true),{timeout:15000,maximumAge:300000});
+};
+function msg(t,bad){$("placeMsg").textContent=t;$("placeMsg").className=bad?"err":"note";}
+async function lookup(q){
+  const raw=q.trim(); if(!raw) return;
+  const pc=raw.toUpperCase().replace(/\s+/g,"");
+  msg("Looking up "+raw+"…");
+  // 1) online postcode / town lookup (postcodes.io, free)
+  try{
+    let url=null;
+    if(/^[A-Z]{1,2}\d[A-Z\d]?\d[A-Z]{2}$/.test(pc)) url="https://api.postcodes.io/postcodes/"+pc;
+    else if(/^[A-Z]{1,2}\d[A-Z\d]?$/.test(pc)) url="https://api.postcodes.io/outcodes/"+pc;
+    else url="https://api.postcodes.io/places?limit=5&q="+encodeURIComponent(raw);
+    const ctl=new AbortController(); setTimeout(()=>ctl.abort(),6000);
+    const r=await fetch(url,{signal:ctl.signal});
+    if(r.ok){const j=await r.json();let x=j.result;if(Array.isArray(x)){x=x.find(p=>/England/i.test(p.country||""))||x[0];}
+      if(x&&x.latitude){setPlace({name:x.postcode||x.outcode||x.name_1||raw,lat:x.latitude,lon:x.longitude},$("placeGo"));return;}}
+  }catch(e){/* offline - fall through */}
+  // 2) offline: match stations' postcodes / towns
+  const up=raw.toUpperCase();
+  let m=st.filter(s=>s.lat!=null&&(s.pc.replace(/\s/g,"")===pc));
+  if(!m.length) m=st.filter(s=>s.lat!=null&&s.pc.split(" ")[0]===pc);
+  if(!m.length) m=st.filter(s=>s.lat!=null&&(s.town||"").toUpperCase()===up);
+  if(!m.length) m=st.filter(s=>s.lat!=null&&(s.town||"").toUpperCase().includes(up));
+  if(m.length){const lat=m.reduce((a,s)=>a+s.lat,0)/m.length,lon=m.reduce((a,s)=>a+s.lon,0)/m.length;setPlace({name:raw.toUpperCase()+" (approx.)",lat,lon},$("placeGo"));return;}
+  msg("Couldn't find \""+raw+"\". Try a full postcode like WN8 7AA.",true);
+}
+$("placeGo").onclick=()=>lookup($("placeInput").value);
+$("placeInput").addEventListener("keydown",e=>{if(e.key==="Enter")lookup(e.target.value);});
+let qt;$("search").addEventListener("input",e=>{clearTimeout(qt);qt=setTimeout(()=>{S.q=e.target.value.trim().toLowerCase();render(true);},150);});
+$("freshOnly").onchange=e=>{S.fresh=e.target.checked;render(true);};
+document.querySelectorAll("#tbl th").forEach(th=>th.onclick=()=>{const k=th.dataset.k;if(S.sort===k)S.desc=!S.desc;else{S.sort=k;S.desc=(k==="t");}render(false);});
+
+// ---------- map ----------
+let map=null, layer=null, markers={}, here=null;
+if(window.L){
+  $("mapMsg").remove();
+  map=L.map("map",{preferCanvas:true,scrollWheelZoom:false}).setView([S.place.lat,S.place.lon],11);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:18,attribution:"&copy; OpenStreetMap contributors"}).addTo(map);
+  layer=L.layerGroup().addTo(map);
+}
+function popup(s){
+  let h="<b>"+esc(s.brand)+"</b> – "+esc(s.name)+"<br>"+esc(s.addr)+(s.town?", "+esc(s.town):"")+" "+esc(s.pc)+"<br>";
+  if(s._d!=null) h+=s._d.toFixed(1)+" miles from "+esc(S.place.name)+"<br>";
+  h+="<table>";
+  Object.keys(FUELS).forEach(f=>{const p=s.prices[f];if(!p)return;const a=age(p.t);
+    h+="<tr><td>"+(f===S.fuel?"<b>":"")+SHORT[f]+(f===S.fuel?"</b>":"")+"</td><td><b>"+fmtP(p.p)+"</b></td><td class='"+(a.stale?"stale":"")+"' title='"+esc(a.full)+"'>"+esc(a.txt)+"</td></tr>";});
+  h+="</table><span style='color:#636b7a'>Source: "+esc(s.src)+"</span>";
+  if(s.lat!=null) h+="<br><a target='_blank' rel='noopener' href='https://www.google.com/maps/dir/?api=1&destination="+s.lat+","+s.lon+"'>Directions</a>";
+  return h;
+}
+function focus(s){
+  if(!map||s.lat==null) return;
+  map.setView([s.lat,s.lon],14);
+  const m=markers[s.id]; if(m) m.openPopup();
+  $("map").scrollIntoView({behavior:"smooth",block:"center"});
+}
+
+// ---------- main render ----------
+function rows(){
+  const f=S.fuel, q=S.q;
+  const out=[];
+  for(const s of st){
+    const p=s.prices[f]; if(!p) continue;
+    s._d = (s.lat!=null&&S.place) ? miles(S.place.lat,S.place.lon,s.lat,s.lon) : null;
+    if(S.radius && (s._d==null || s._d>S.radius)) continue;
+    if(S.fresh && (!p.t || now-new Date(p.t)>WEEK)) continue;
+    if(q){const hay=(s.brand+" "+s.name+" "+s.addr+" "+s.town+" "+s.pc+" "+s.pc.replace(/\s/g,"")).toLowerCase();if(!hay.includes(q))continue;}
+    out.push(s);
+  }
+  return out;
+}
+function sortRows(list){
+  const f=S.fuel,k=S.sort,dir=S.desc?-1:1;
+  const v=s=>k==="price"?s.prices[f].p:k==="dist"?(s._d==null?1e9:s._d):k==="t"?(s.prices[f].t||""):String(s[k]||"").toLowerCase();
+  return list.sort((a,b)=>{const x=v(a),y=v(b);return (x<y?-1:x>y?1:0)*dir||(a.prices[f].p-b.prices[f].p);});
+}
+function render(fit){
+  const f=S.fuel, list=rows();
+  const prices=list.map(s=>s.prices[f].p).sort((a,b)=>a-b);
+  const lo=prices[0], hi=prices[prices.length-1];
+  // colour by rank so the spread shows even when most prices are close
+  const frac=p=>{if(prices.length<2)return 0;let a=0,b=prices.length;while(a<b){const m=(a+b)>>1;if(prices[m]<p)a=m+1;else b=m;}let e=a;while(e<prices.length&&prices[e]===p)e++;return ((a+e-1)/2)/(prices.length-1);};
+  const where=S.radius?"within "+S.radius+" miles of "+S.place.name:"in the North West";
+
+  // top 5
+  const top=[...list].sort((a,b)=>a.prices[f].p-b.prices[f].p||(a._d||0)-(b._d||0)).slice(0,5);
+  $("topTitle").textContent="Cheapest "+SHORT[f].toLowerCase()+" "+where;
+  const ol=$("top5"); ol.innerHTML="";
+  if(!top.length) ol.innerHTML="<li class='note'>No stations match. Try a bigger radius.</li>";
+  top.forEach(s=>{const p=s.prices[f],a=age(p.t);const li=document.createElement("li");
+    li.innerHTML="<div class='pbig' style='color:"+colour(frac(p.p))+"'>"+fmtP(p.p)+"</div><div class='tinfo'><b>"+esc(label(s))+"</b><span>"+esc(s.town||s.addr)+" "+esc(s.pc)+" · <span class='"+(a.stale?"stale":"")+"' title='"+esc(a.full)+"'>price set "+esc(a.txt)+"</span></span></div><div class='dist'>"+(s._d!=null?s._d.toFixed(1)+" mi":"")+"</div>";
+    li.onclick=()=>focus(s); ol.appendChild(li);});
+
+  // stats for selected fuel (whole NW) + shown set
+  const g=DATA.stats[f];
+  $("statTitle").textContent=SHORT[f]+" across the North West";
+  $("stats").innerHTML=g?"<div><b>"+fmtP(g.avg)+"</b><span>average</span></div><div><b style='color:var(--ok)'>"+fmtP(g.min)+"</b><span>lowest</span></div><div><b style='color:var(--bad)'>"+fmtP(g.max)+"</b><span>highest</span></div>":"<div>No data</div>";
+  let h="<tr><th>Fuel</th><th>Average</th><th>Lowest</th><th>Highest</th><th>Stations</th></tr>";
+  Object.keys(FUELS).forEach(k=>{const x=DATA.stats[k];if(!x)return;h+="<tr"+(k===f?" style='font-weight:700'":"")+"><td>"+SHORT[k]+"</td><td>"+fmtP(x.avg)+"</td><td>"+fmtP(x.min)+"</td><td>"+fmtP(x.max)+"</td><td>"+x.n+"</td></tr>";});
+  if(prices.length){const avg=prices.reduce((a,b)=>a+b,0)/prices.length;h+="<tr><td colspan='5' style='text-align:left;color:#636b7a'>Shown now ("+where+"): "+prices.length+" stations, average "+fmtP(avg)+", "+fmtP(lo)+" to "+fmtP(hi)+"</td></tr>";}
+  $("allStats").innerHTML=h;
+
+  // table
+  sortRows(list);
+  document.querySelectorAll("#tbl th").forEach(th=>{th.classList.toggle("sorted",th.dataset.k===S.sort);th.classList.toggle("desc",th.dataset.k===S.sort&&S.desc);});
+  $("tblTitle").textContent=FUELS[f]+": "+list.length+" stations "+where+(S.q?" matching \""+S.q+"\"":"");
+  const tb=document.querySelector("#tbl tbody"); const frag=document.createDocumentFragment();
+  list.forEach(s=>{const p=s.prices[f],a=age(p.t);const tr=document.createElement("tr");
+    tr.innerHTML="<td class='p'><span class='dot' style='background:"+colour(frac(p.p))+"'></span>"+fmtP(p.p)+"</td><td>"+esc(s.brand)+"</td><td>"+esc(s.name)+"<div class='sub'>"+esc(s.addr)+", "+esc(s.town)+" "+esc(s.pc)+" · <span class='"+(a.stale?"stale":"")+"'>"+esc(a.txt)+"</span></div></td><td class='col-addr'>"+esc(s.addr)+"</td><td class='col-pc' style='white-space:nowrap'>"+esc(s.pc)+"</td><td class='col-town'>"+esc(s.town)+"</td><td>"+(s._d!=null?s._d.toFixed(1):"")+"</td><td class='col-upd "+(a.stale?"stale":"")+"' title='"+esc(a.full)+(p.alt?" ("+esc(p.alt)+")":"")+"'>"+esc(a.txt)+"<div class='note' style='font-size:11px'>"+esc(p.src)+"</div></td>";
+    tr.onclick=()=>focus(s); frag.appendChild(tr);});
+  tb.innerHTML=""; tb.appendChild(frag);
+
+  // map
+  if(map){
+    layer.clearLayers(); markers={};
+    const pts=[];
+    [...list].sort((a,b)=>b.prices[f].p-a.prices[f].p).forEach(s=>{ if(s.lat==null) return;
+      const m=L.circleMarker([s.lat,s.lon],{radius:7,weight:1,color:"#222",fillColor:colour(frac(s.prices[f].p)),fillOpacity:.9});
+      m.bindTooltip(fmtP(s.prices[f].p)+" "+s.brand);
+      m.bindPopup(()=>popup(s)); m.addTo(layer); markers[s.id]=m; pts.push([s.lat,s.lon]);});
+    if(here) here.remove();
+    here=L.circleMarker([S.place.lat,S.place.lon],{radius:9,weight:3,color:"#0b5cad",fillColor:"#fff",fillOpacity:1}).bindTooltip(S.place.name).addTo(map);
+    if(fit){ if(S.radius && pts.length){pts.push([S.place.lat,S.place.lon]);map.fitBounds(pts,{padding:[20,20],maxZoom:13});}
+      else if(pts.length) map.fitBounds(pts,{padding:[20,20]}); }
+  }
+  window.__state={fuel:f,count:list.length,markers:Object.keys(markers).length,top:top.map(s=>({name:s.name,brand:s.brand,p:s.prices[f].p,d:s._d}))};
+}
+msg("Distances from "+S.place.name);
+render(true);
+})();
+</script>
+</body>
+</html>
